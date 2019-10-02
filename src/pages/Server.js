@@ -77,7 +77,7 @@ export class Server extends Component {
                         ? "status-ok"
                         : "status-unknown"
                     }
-                  />
+                  /> HEYO
                   <Text
                     margin={{ left: "xsmall" }}
                     color="dark-5"
