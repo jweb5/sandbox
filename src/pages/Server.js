@@ -82,7 +82,7 @@ export class Server extends Component {
                     margin={{ left: "xsmall" }}
                     color="dark-5"
                     size="xsmall"
-                  >
+                  > something
                     {server.status}
                   </Text>
                 </Box>

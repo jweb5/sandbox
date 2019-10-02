@@ -36,6 +36,7 @@ export const Dashboard = () => (
       align="center"
       justify="between"
     >
+      heyo
       <Text>There are 10 severs offline</Text>
       <FormClose size="medium" />
     </Box>
