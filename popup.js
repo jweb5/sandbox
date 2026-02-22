@@ -48,9 +48,14 @@ toggleEnabled.addEventListener('change', () => {
   });
 });
 
+/** Strip invisible / control characters the same way background.js does */
+function sanitizeKey(raw) {
+  return raw.replace(/[\u0000-\u001F\u007F-\u00A0\u200B-\u200D\uFEFF]/g, '').trim();
+}
+
 // Save all settings
 btnSave.addEventListener('click', async () => {
-  const apiKey = apiKeyInput.value.trim();
+  const apiKey = sanitizeKey(apiKeyInput.value);
   const model = modelSelect.value;
 
   if (!apiKey) {
@@ -59,8 +64,9 @@ btnSave.addEventListener('click', async () => {
     return;
   }
 
-  if (!apiKey.startsWith('sk-ant-')) {
-    showBanner('⚠ API key should start with sk-ant-', 'error');
+  // Soft format hint only — don't block if format looks unusual
+  if (apiKey.length < 20) {
+    showBanner('⚠ API key looks too short — please double-check it', 'error');
     return;
   }
 

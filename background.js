@@ -58,7 +58,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function checkGrammar(text, apiKey, model) {
+async function checkGrammar(text, rawApiKey, model) {
+  const apiKey = sanitizeKey(rawApiKey);
   const userPrompt = `Check this text for grammar, spelling, punctuation, style, and clarity issues:\n\n"""${text}"""`;
 
   const response = await fetch(CLAUDE_API_URL, {
@@ -110,24 +111,52 @@ async function checkGrammar(text, apiKey, model) {
   };
 }
 
-async function validateApiKey(apiKey) {
-  // Send a minimal request to verify the key works
-  const response = await fetch(CLAUDE_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5',
-      max_tokens: 10,
-      messages: [{ role: 'user', content: 'Hi' }],
-    }),
-  });
+/** Strip all non-printable / invisible unicode characters and whitespace */
+function sanitizeKey(key) {
+  return String(key)
+    .replace(/[\u0000-\u001F\u007F-\u00A0\u200B-\u200D\uFEFF]/g, '') // control + zero-width chars
+    .trim();
+}
 
-  if (response.status === 401) return { success: false, error: 'Invalid API key.' };
-  if (response.ok || response.status === 529) return { success: true };
+async function validateApiKey(rawKey) {
+  const apiKey = sanitizeKey(rawKey);
+
+  if (!apiKey || typeof apiKey !== 'string') {
+    return { success: false, error: 'API key is empty after sanitization.' };
+  }
+
+  let response;
+  try {
+    response = await fetch(CLAUDE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    });
+  } catch (networkErr) {
+    return { success: false, error: `Network error: ${networkErr.message}. Check your internet connection.` };
+  }
+
+  // Always read the body for a useful message
   const data = await response.json().catch(() => ({}));
-  return { success: false, error: data.error?.message || `HTTP ${response.status}` };
+  const apiMessage = data.error?.message || '';
+
+  if (response.ok) return { success: true };
+  if (response.status === 529) return { success: true }; // overloaded but key is fine
+
+  if (response.status === 401) {
+    return { success: false, error: `Invalid API key (401). The key was rejected by Anthropic. ${apiMessage}` };
+  }
+  if (response.status === 403) {
+    return { success: false, error: `Access denied (403). Your key may lack permissions. ${apiMessage}` };
+  }
+
+  return { success: false, error: `API returned ${response.status}${apiMessage ? ': ' + apiMessage : ''}` };
 }
