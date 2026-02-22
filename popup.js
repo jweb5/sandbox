@@ -48,9 +48,9 @@ toggleEnabled.addEventListener('change', () => {
   });
 });
 
-/** Strip invisible / control characters the same way background.js does */
+/** Keep only printable ASCII (0x21–0x7E) — same as background.js. */
 function sanitizeKey(raw) {
-  return raw.replace(/[\u0000-\u001F\u007F-\u00A0\u200B-\u200D\uFEFF]/g, '').trim();
+  return String(raw).replace(/[^\x21-\x7E]/g, '');
 }
 
 // Save all settings

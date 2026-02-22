@@ -112,11 +112,10 @@ async function checkGrammar(text, rawApiKey, model) {
   };
 }
 
-/** Strip all non-printable / invisible unicode characters and whitespace */
+/** Keep only printable ASCII (0x21–0x7E). HTTP headers must be ISO-8859-1
+ *  and an API key should never contain anything outside plain ASCII. */
 function sanitizeKey(key) {
-  return String(key)
-    .replace(/[\u0000-\u001F\u007F-\u00A0\u200B-\u200D\uFEFF]/g, '') // control + zero-width chars
-    .trim();
+  return String(key).replace(/[^\x21-\x7E]/g, '');
 }
 
 async function validateApiKey(rawKey) {
