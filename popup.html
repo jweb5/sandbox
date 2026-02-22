@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Grammar Checker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <span class="logo-icon">✦</span>
+        <div>
+          <div class="header-title">Claude Grammar</div>
+          <div class="header-sub">AI Writing Assistant</div>
+        </div>
+      </div>
+      <label class="toggle" title="Enable / Disable">
+        <input type="checkbox" id="toggle-enabled" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </header>
+
+    <!-- Status banner -->
+    <div id="status-banner" class="status-banner hidden"></div>
+
+    <!-- API Key section -->
+    <section class="section">
+      <label class="label" for="api-key">Anthropic API Key</label>
+      <div class="input-row">
+        <input
+          type="password"
+          id="api-key"
+          class="input"
+          placeholder="sk-ant-api03-..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button class="btn-icon" id="toggle-visibility" title="Show/Hide key">
+          <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="key-hint">
+        Get a key at <a href="https://console.anthropic.com/keys" target="_blank" rel="noopener">console.anthropic.com</a>
+      </div>
+    </section>
+
+    <!-- Model section -->
+    <section class="section">
+      <label class="label" for="model-select">Claude Model</label>
+      <select id="model-select" class="select">
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 — Fast &amp; efficient (recommended)</option>
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — Balanced quality</option>
+        <option value="claude-opus-4-6">Claude Opus 4.6 — Most thorough</option>
+      </select>
+      <div class="key-hint">Haiku is fastest for real-time checking.</div>
+    </section>
+
+    <!-- Check types -->
+    <section class="section">
+      <div class="label">Check For</div>
+      <div class="check-types">
+        <label class="check-item">
+          <input type="checkbox" class="check-type" data-type="spelling" checked> Spelling
+        </label>
+        <label class="check-item">
+          <input type="checkbox" class="check-type" data-type="grammar" checked> Grammar
+        </label>
+        <label class="check-item">
+          <input type="checkbox" class="check-type" data-type="punctuation" checked> Punctuation
+        </label>
+        <label class="check-item">
+          <input type="checkbox" class="check-type" data-type="style" checked> Style
+        </label>
+        <label class="check-item">
+          <input type="checkbox" class="check-type" data-type="clarity" checked> Clarity
+        </label>
+      </div>
+    </section>
+
+    <!-- Save button -->
+    <button class="btn-save" id="btn-save">Save Settings</button>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Powered by <a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic Claude</a> · v1.0.0
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
