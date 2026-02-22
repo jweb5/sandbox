@@ -96,6 +96,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'SET_BADGE') {
+    chrome.action.setBadgeText({ text: message.text || '' });
+    if (message.color) chrome.action.setBadgeBackgroundColor({ color: message.color });
+    return false;
+  }
+
   if (message.type === 'VALIDATE_KEY') {
     validateApiKey(sanitizeKey(message.apiKey))
       .then(result => sendResponse(result))

@@ -72,6 +72,10 @@
     if (!isEditable(el)) return;
     currentEl = el;
     scheduleFabUpdate();
+    // Trigger a check on focus if the field already has enough text
+    if (enabled && getText(el).trim().length >= MIN_CHARS) {
+      scheduleCheck(el);
+    }
   }
 
   function onFocusOut(e) {
@@ -118,15 +122,35 @@
     isChecking = true;
     lastCheckedText = text;
     showPanelLoading(el);
+    chrome.runtime.sendMessage({ type: 'SET_BADGE', text: '…', color: '#7c3aed' }).catch(() => {});
 
-    const response = await chrome.runtime.sendMessage({ type: 'CHECK_GRAMMAR', text });
+    let response;
+    try {
+      response = await chrome.runtime.sendMessage({ type: 'CHECK_GRAMMAR', text });
+    } catch (err) {
+      isChecking = false;
+      chrome.runtime.sendMessage({ type: 'SET_BADGE', text: '!', color: '#f97316' }).catch(() => {});
+      showPanelError('Could not reach extension background. Try reloading the page.');
+      return;
+    }
+
     isChecking = false;
 
-    if (!enabled || currentEl !== el) return; // user moved on
+    if (!enabled || currentEl !== el) {
+      chrome.runtime.sendMessage({ type: 'SET_BADGE', text: '', color: '' }).catch(() => {});
+      return;
+    }
 
     if (response?.success) {
+      const count = response.issues?.length ?? 0;
+      chrome.runtime.sendMessage({
+        type: 'SET_BADGE',
+        text: count > 0 ? String(count) : '✓',
+        color: count > 0 ? '#ef4444' : '#22c55e',
+      }).catch(() => {});
       renderPanel(el, response.issues, response.score, response.summary);
     } else {
+      chrome.runtime.sendMessage({ type: 'SET_BADGE', text: '!', color: '#f97316' }).catch(() => {});
       showPanelError(response?.error || 'Unknown error');
     }
   }
