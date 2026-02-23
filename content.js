@@ -7,7 +7,7 @@
 
   // ── Constants ───────────────────────────────────────────────────────────
   const DEBOUNCE_MS = 1800;      // Wait after last keystroke before checking
-  const MIN_CHARS = 20;          // Minimum characters before triggering a check
+  const MIN_CHARS = 10;          // Minimum characters before triggering a check
   const PANEL_ID = 'cgc-panel';
   const BTN_ID = 'cgc-fab';
 
@@ -116,10 +116,10 @@
   }
 
   function onScrollEl(e) {
-    const el = e.target;
-    if (!isEditable(el)) return;
-    const mirror = mirrors.get(el);
-    if (mirror && mirror.style.display !== 'none') syncMirrorPosition(el, mirror);
+    // Sync on any scroll — page scroll changes viewport coords for position:fixed mirror
+    if (!currentEl) return;
+    const mirror = mirrors.get(currentEl);
+    if (mirror && mirror.style.display !== 'none') syncMirrorPosition(currentEl, mirror);
   }
 
   function onWindowResize() {
@@ -290,8 +290,9 @@
 
   function syncMirrorPosition(el, mirror) {
     const rect = el.getBoundingClientRect();
-    mirror.style.top = `${rect.top + window.scrollY}px`;
-    mirror.style.left = `${rect.left + window.scrollX}px`;
+    // Use viewport coords — mirror is position:fixed
+    mirror.style.top = `${rect.top}px`;
+    mirror.style.left = `${rect.left}px`;
     mirror.style.width = `${rect.width}px`;
     mirror.style.height = `${rect.height}px`;
     mirror.scrollTop = el.scrollTop;
@@ -412,10 +413,9 @@
   function updateFab(el) {
     if (!fab) fab = createFab();
     const rect = el.getBoundingClientRect();
-    const top = window.scrollY + rect.bottom - 28;
-    const left = window.scrollX + rect.right - 28;
-    fab.style.top = `${top}px`;
-    fab.style.left = `${left}px`;
+    // Viewport coords — FAB is position:fixed
+    fab.style.top = `${rect.bottom - 28}px`;
+    fab.style.left = `${rect.right - 28}px`;
     fab.style.display = 'flex';
   }
 

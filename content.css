@@ -325,7 +325,7 @@
 
 /* ── Floating Action Button ─────────────────────────────────────────────── */
 #cgc-fab {
-  position: absolute;
+  position: fixed;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -349,7 +349,7 @@
 
 /* ── Mirror overlay (textarea / input highlights) ───────────────────────── */
 .cgc-mirror {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   pointer-events: none;
