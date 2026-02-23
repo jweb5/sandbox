@@ -346,3 +346,65 @@
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.5);
   opacity: 1;
 }
+
+/* ── Mirror overlay (textarea / input highlights) ───────────────────────── */
+.cgc-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  color: transparent;
+  background: transparent;
+  z-index: 2147483640;
+  overflow: hidden;
+  border-color: transparent;
+  border-style: solid;
+  resize: none;
+  margin: 0;
+}
+
+/* ── Inline highlight marks ─────────────────────────────────────────────── */
+.cgc-hl {
+  border-radius: 2px;
+  position: relative;
+}
+
+/* Spelling — red */
+.cgc-hl-spelling {
+  background: rgba(239, 68, 68, 0.18);
+  text-decoration: underline wavy #ef4444;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+/* Grammar — orange */
+.cgc-hl-grammar {
+  background: rgba(249, 115, 22, 0.15);
+  text-decoration: underline wavy #f97316;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+/* Punctuation — amber */
+.cgc-hl-punctuation {
+  background: rgba(234, 179, 8, 0.18);
+  text-decoration: underline wavy #ca8a04;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+/* Style — blue */
+.cgc-hl-style {
+  background: rgba(59, 130, 246, 0.14);
+  text-decoration: underline wavy #3b82f6;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+/* Clarity — purple */
+.cgc-hl-clarity {
+  background: rgba(139, 92, 246, 0.14);
+  text-decoration: underline wavy #8b5cf6;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}

@@ -27,6 +27,7 @@
   let isChecking = false;
   let panel = null;
   let fab = null;
+  const mirrors = new WeakMap(); // textarea/input el → mirror overlay div
 
   // ── Initialization ───────────────────────────────────────────────────────
   async function init() {
@@ -55,6 +56,8 @@
     document.addEventListener('focusout', onFocusOut, true);
     document.addEventListener('input', onInput, true);
     document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('scroll', onScrollEl, true);
+    window.addEventListener('resize', onWindowResize);
   }
 
   function detach() {
@@ -62,6 +65,9 @@
     document.removeEventListener('focusout', onFocusOut, true);
     document.removeEventListener('input', onInput, true);
     document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('scroll', onScrollEl, true);
+    window.removeEventListener('resize', onWindowResize);
+    if (currentEl) clearHighlights(currentEl);
     hidePanel();
     hideFab();
     currentEl = null;
@@ -87,6 +93,7 @@
       if (!panelEl?.contains(active) && !fabEl?.contains(active) && active !== currentEl) {
         hidePanel();
         hideFab();
+        if (currentEl) clearHighlights(currentEl);
         currentEl = null;
       }
     }, 150);
@@ -97,6 +104,7 @@
     const el = e.target;
     if (!isEditable(el)) return;
     currentEl = el;
+    clearHighlights(el); // Clear stale highlights while typing
     scheduleCheck(el);
     scheduleFabUpdate();
   }
@@ -104,6 +112,22 @@
   function onKeyDown(e) {
     if (e.key === 'Escape') {
       hidePanel();
+    }
+  }
+
+  function onScrollEl(e) {
+    const el = e.target;
+    if (!isEditable(el)) return;
+    const mirror = mirrors.get(el);
+    if (mirror && mirror.style.display !== 'none') syncMirrorPosition(el, mirror);
+  }
+
+  function onWindowResize() {
+    if (!currentEl) return;
+    const mirror = mirrors.get(currentEl);
+    if (mirror && mirror.style.display !== 'none') {
+      syncMirrorStyles(currentEl, mirror);
+      syncMirrorPosition(currentEl, mirror);
     }
   }
 
@@ -216,6 +240,167 @@
     }
   }
 
+  // ── Inline Highlights ─────────────────────────────────────────────────────
+
+  function highlightIssues(el, issues) {
+    if (!issues || issues.length === 0) {
+      clearHighlights(el);
+      return;
+    }
+    if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      applyContentEditableHighlights(el, issues);
+    } else {
+      applyMirrorHighlights(el, issues);
+    }
+  }
+
+  function clearHighlights(el) {
+    if (!el) return;
+    if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      removeContentEditableHighlights(el);
+    } else {
+      const mirror = mirrors.get(el);
+      if (mirror) mirror.style.display = 'none';
+    }
+  }
+
+  // ── Mirror overlay (textarea / input) ──────────────────────────────────
+
+  const MIRROR_COPY_STYLES = [
+    'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing',
+    'lineHeight', 'textTransform', 'paddingTop', 'paddingRight',
+    'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth',
+    'borderBottomWidth', 'borderLeftWidth', 'boxSizing', 'tabSize',
+  ];
+
+  function syncMirrorStyles(el, mirror) {
+    const cs = window.getComputedStyle(el);
+    for (const prop of MIRROR_COPY_STYLES) {
+      mirror.style[prop] = cs[prop];
+    }
+    if (el.tagName.toLowerCase() === 'textarea') {
+      mirror.style.whiteSpace = 'pre-wrap';
+      mirror.style.wordBreak = 'break-word';
+      mirror.style.overflowWrap = 'break-word';
+    } else {
+      mirror.style.whiteSpace = 'pre';
+      mirror.style.overflow = 'hidden';
+    }
+  }
+
+  function syncMirrorPosition(el, mirror) {
+    const rect = el.getBoundingClientRect();
+    mirror.style.top = `${rect.top + window.scrollY}px`;
+    mirror.style.left = `${rect.left + window.scrollX}px`;
+    mirror.style.width = `${rect.width}px`;
+    mirror.style.height = `${rect.height}px`;
+    mirror.scrollTop = el.scrollTop;
+    mirror.scrollLeft = el.scrollLeft;
+  }
+
+  function buildMirrorHtml(text, issues) {
+    // Find non-overlapping issue ranges (first occurrence of each)
+    const markers = [];
+    for (const issue of issues) {
+      if (!issue.original) continue;
+      const idx = text.indexOf(issue.original);
+      if (idx === -1) continue;
+      markers.push({ start: idx, end: idx + issue.original.length, type: issue.type });
+    }
+    markers.sort((a, b) => a.start - b.start);
+    // Remove overlaps
+    const deduped = [];
+    for (const m of markers) {
+      if (deduped.length && m.start < deduped[deduped.length - 1].end) continue;
+      deduped.push(m);
+    }
+    // Build HTML
+    let html = '';
+    let pos = 0;
+    for (const m of deduped) {
+      html += escapeHtml(text.slice(pos, m.start));
+      html += `<mark class="cgc-hl cgc-hl-${m.type}">${escapeHtml(text.slice(m.start, m.end))}</mark>`;
+      pos = m.end;
+    }
+    html += escapeHtml(text.slice(pos));
+    return html;
+  }
+
+  function applyMirrorHighlights(el, issues) {
+    let mirror = mirrors.get(el);
+    if (!mirror) {
+      mirror = document.createElement('div');
+      mirror.className = 'cgc-mirror';
+      mirror.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(mirror);
+      mirrors.set(el, mirror);
+    }
+    syncMirrorStyles(el, mirror);
+    syncMirrorPosition(el, mirror);
+    mirror.innerHTML = buildMirrorHtml(getText(el), issues);
+    mirror.style.display = 'block';
+  }
+
+  // ── contenteditable highlights ──────────────────────────────────────────
+
+  function removeContentEditableHighlights(el) {
+    const marks = el.querySelectorAll('mark[data-cgchl]');
+    for (const mark of marks) {
+      const parent = mark.parentNode;
+      if (!parent) continue;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+    }
+    try { el.normalize(); } catch (e) { /* ignore */ }
+  }
+
+  function wrapFirstOccurrence(root, original, type) {
+    // Snapshot text nodes first to avoid TreeWalker invalidation on mutation
+    const nodes = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) {
+      if (!n.parentElement?.hasAttribute('data-cgchl')) nodes.push(n);
+    }
+    for (const node of nodes) {
+      const idx = node.textContent.indexOf(original);
+      if (idx === -1) continue;
+      const parent = node.parentNode;
+      if (!parent) continue;
+      const before = node.textContent.slice(0, idx);
+      const after = node.textContent.slice(idx + original.length);
+      const mark = document.createElement('mark');
+      mark.setAttribute('data-cgchl', '');
+      mark.className = `cgc-hl cgc-hl-${type}`;
+      mark.textContent = original;
+      if (before) parent.insertBefore(document.createTextNode(before), node);
+      parent.insertBefore(mark, node);
+      if (after) parent.insertBefore(document.createTextNode(after), node);
+      parent.removeChild(node);
+      return; // Only wrap first occurrence
+    }
+  }
+
+  function applyContentEditableHighlights(el, issues) {
+    // Save cursor
+    const sel = window.getSelection();
+    let savedRange = null;
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      try { savedRange = sel.getRangeAt(0).cloneRange(); } catch (e) { /* ignore */ }
+    }
+
+    removeContentEditableHighlights(el);
+
+    for (const issue of issues) {
+      if (issue.original) wrapFirstOccurrence(el, issue.original, issue.type);
+    }
+
+    // Restore cursor
+    if (savedRange && sel) {
+      try { sel.removeAllRanges(); sel.addRange(savedRange); } catch (e) { /* ignore */ }
+    }
+  }
+
   // ── Floating Action Button (FAB) ──────────────────────────────────────────
   function scheduleFabUpdate() {
     requestAnimationFrame(() => {
@@ -314,6 +499,9 @@
   }
 
   function renderPanel(el, issues, score, summary) {
+    // Apply inline highlights first
+    highlightIssues(el, issues);
+
     const p = getOrCreatePanel();
 
     const scoreColor = score >= 90 ? '#22c55e' : score >= 70 ? '#f97316' : '#ef4444';
