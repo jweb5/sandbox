@@ -55,6 +55,7 @@
     document.addEventListener('focusin', onFocusIn, true);
     document.addEventListener('focusout', onFocusOut, true);
     document.addEventListener('input', onInput, true);
+    document.addEventListener('keyup', onKeyUp, true);   // fallback for complex editors
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('scroll', onScrollEl, true);
     window.addEventListener('resize', onWindowResize);
@@ -64,6 +65,7 @@
     document.removeEventListener('focusin', onFocusIn, true);
     document.removeEventListener('focusout', onFocusOut, true);
     document.removeEventListener('input', onInput, true);
+    document.removeEventListener('keyup', onKeyUp, true);
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('scroll', onScrollEl, true);
     window.removeEventListener('resize', onWindowResize);
@@ -105,6 +107,23 @@
     if (!isEditable(el)) return;
     currentEl = el;
     clearHighlights(el); // Clear stale highlights while typing
+    scheduleCheck(el);
+    scheduleFabUpdate();
+  }
+
+  // Fallback for complex editors (Google Docs, Notion, etc.) that don't fire
+  // 'input' events. Ignores modifier-only keypresses.
+  function onKeyUp(e) {
+    if (!enabled) return;
+    // Skip if the 'input' event would already handle it (native inputs)
+    const el = e.target;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return;
+    // Skip modifier-only keys
+    if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' ||
+        e.key === 'Meta' || e.key === 'CapsLock' || e.key === 'Tab') return;
+    if (!isEditable(el)) return;
+    currentEl = el;
+    clearHighlights(el);
     scheduleCheck(el);
     scheduleFabUpdate();
   }
@@ -188,14 +207,62 @@
       const t = (el.type || 'text').toLowerCase();
       return ['text', 'search', 'email', 'url', 'tel', ''].includes(t);
     }
-    return el.isContentEditable === true || el.getAttribute('contenteditable') === 'true';
+    if (el.isContentEditable) return true;
+    // ARIA textbox/combobox (CodeMirror, Google Docs input surface, Notion, etc.)
+    const role = el.getAttribute('role');
+    return role === 'textbox' || role === 'combobox';
   }
 
   function getText(el) {
     if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
-      return el.innerText || '';
+      const text = el.innerText || '';
+      // If the element has no usable text, try site-specific extraction.
+      // (Google Docs renders text in a separate DOM layer, not inside the
+      //  contenteditable that receives keyboard events.)
+      if (text.trim().length < MIN_CHARS) {
+        const fallback = extractSiteText();
+        if (fallback.trim().length >= MIN_CHARS) return fallback;
+      }
+      return text;
+    }
+    // role="textbox" elements without contenteditable (some ARIA editors)
+    if (el.getAttribute('role') === 'textbox' || el.getAttribute('role') === 'combobox') {
+      const text = el.innerText || el.textContent || '';
+      if (text.trim().length < MIN_CHARS) {
+        const fallback = extractSiteText();
+        if (fallback.trim().length >= MIN_CHARS) return fallback;
+      }
+      return text;
     }
     return el.value || '';
+  }
+
+  // Site-specific text extraction for editors that don't store content
+  // inside the element that receives focus/keyboard events.
+  function extractSiteText() {
+    const host = location.hostname;
+
+    // ── Google Docs ─────────────────────────────────────────────────────
+    if (host.includes('docs.google.com')) {
+      const paras = document.querySelectorAll('.kix-paragraphrenderer');
+      if (paras.length > 0) {
+        return Array.from(paras).map(p => p.innerText).join('\n').slice(0, 5000);
+      }
+    }
+
+    // ── Google Slides speaker notes ──────────────────────────────────────
+    if (host.includes('docs.google.com')) {
+      const notes = document.querySelector('.punch-viewer-speakernotestext, .notesTextContainer');
+      if (notes) return notes.innerText.slice(0, 5000);
+    }
+
+    return '';
+  }
+
+  // Returns true for editors where inline DOM highlighting is not feasible
+  // (canvas-rendered or virtual-DOM editors).
+  function isComplexEditor(el) {
+    return location.hostname.includes('docs.google.com');
   }
 
   function applyFix(el, original, suggestion) {
@@ -247,6 +314,8 @@
       clearHighlights(el);
       return;
     }
+    // Canvas/virtual-DOM editors (Google Docs) can't have DOM highlights injected
+    if (isComplexEditor(el)) return;
     if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
       applyContentEditableHighlights(el, issues);
     } else {
