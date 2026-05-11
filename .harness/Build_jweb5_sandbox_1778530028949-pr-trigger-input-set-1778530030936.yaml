@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_jweb5_sandbox_1778530028949-pr-trigger-input-set
+  identifier: Build_jweb5_sandbox_1778530028949prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: foo2
+  pipeline:
+    identifier: Build_jweb5_sandbox_1778530028949
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>
