@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@harnessio/pipeline-graph": "1.9.6",
+    "@harnessio/ui": "0.5.49",
     "classnames": "^2.5.1",
     "lodash-es": "^4.17.21",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0"
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",

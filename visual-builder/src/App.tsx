@@ -1,240 +1,108 @@
-import React, { useCallback, useState } from 'react'
-import {
-  CanvasProvider,
-  PipelineGraph,
-  ContainerNode,
-  type NodeContent,
-  type AnyContainerNodeType,
-} from '@harnessio/pipeline-graph'
-import { StartNode } from './components/nodes/StartNode'
-import { EndNode } from './components/nodes/EndNode'
-import { StepNode } from './components/nodes/StepNode'
-import { StageNode } from './components/nodes/StageNode'
-import { ParallelGroupNode } from './components/nodes/ParallelGroupNode'
-import { CanvasControls } from './components/CanvasControls'
-import { Sidebar } from './components/Sidebar'
-import { PropertyPanel } from './components/PropertyPanel'
-import {
-  buildGraphData,
-  findSelectedNode,
-  deleteNodeFromModel,
-  updateStepInModel,
-  updateStageInModel,
-  addStepToStage,
-  generateId,
-} from './pipeline/utils'
-import { initialPipeline } from './pipeline/initial-pipeline'
-import {
-  PipelineModel,
-  PipelineStep,
-  PipelineStage,
-  PipelineParallelGroup,
-  StepType,
-  STEP_TYPE_LABELS,
-} from './pipeline/types'
+import React from 'react'
+import { MemoryRouter } from 'react-router-dom'
+import { ThemeProvider, TranslationProvider, DialogProvider, RouterContextProvider } from '@harnessio/ui/context'
+import { TooltipProvider } from '@harnessio/ui/components'
+import { useNavigate, useLocation, Outlet, Route, Routes } from 'react-router-dom'
+import { ComponentLibrary } from './components/ComponentLibrary'
+import { BuilderCanvas } from './components/BuilderCanvas'
+import { PropertiesPanel } from './components/PropertiesPanel'
+import { BuilderContext, createBuilderStore } from './store'
+import { REGISTRY } from './registry'
 
-const NODE_TYPES: NodeContent[] = [
-  { type: 'start', containerType: ContainerNode.leaf, component: StartNode as any },
-  { type: 'end', containerType: ContainerNode.leaf, component: EndNode as any },
-  { type: 'step', containerType: ContainerNode.leaf, component: StepNode as any },
-  { type: 'stage', containerType: ContainerNode.serial, component: StageNode as any },
-  { type: 'parallel', containerType: ContainerNode.parallel, component: ParallelGroupNode as any },
-]
-
-function getHeaderHeight(node: AnyContainerNodeType): number {
-  if (node.type === 'stage') return 171
-  if (node.type === 'parallel' || node.type === 'serial') return 121
-  return 0
+function RouterBridge({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return (
+    <RouterContextProvider
+      Link={({ to, children: c, ...rest }: any) => <a href={typeof to === 'string' ? to : '#'} onClick={e => e.preventDefault()} {...rest}>{c}</a>}
+      NavLink={({ to, children: c, ...rest }: any) => <a href={typeof to === 'string' ? to : '#'} onClick={e => e.preventDefault()} {...rest}>{c}</a>}
+      navigate={navigate}
+      location={location as any}
+      useSearchParams={() => [new URLSearchParams(), () => {}] as any}
+      useMatches={() => [] as any}
+      useParams={() => ({}) as any}
+      Outlet={Outlet}
+      Switch={Routes}
+      Route={Route}
+    >
+      {children}
+    </RouterContextProvider>
+  )
 }
 
-export default function App() {
-  const [pipeline, setPipeline] = useState<PipelineModel>(initialPipeline)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-
-  const collapse = useCallback((path: string, state: boolean) => {
-    setCollapsed(prev => ({ ...prev, [path]: state }))
-  }, [])
-
-  const graphData = buildGraphData(pipeline, { selectedId, onSelect: setSelectedId })
-  const selected = selectedId ? findSelectedNode(pipeline, selectedId) : null
-
-  const selectedStageId: string | null =
-    selected?.kind === 'stage'
-      ? selected.node.id
-      : selected?.kind === 'step'
-      ? selected.stageId
-      : null
-
-  const handleAddStage = () => {
-    const newStage: PipelineStage = {
-      id: generateId(),
-      type: 'serial',
-      name: `Stage ${pipeline.stages.length + 1}`,
-      steps: [],
-    }
-    setPipeline(prev => ({ ...prev, stages: [...prev.stages, newStage] }))
-  }
-
-  const handleAddParallelGroup = () => {
-    const newStage: PipelineStage = {
-      id: generateId(),
-      type: 'serial',
-      name: 'Stage A',
-      steps: [],
-    }
-    const newGroup: PipelineParallelGroup = {
-      id: generateId(),
-      type: 'parallel',
-      name: `Parallel Group ${pipeline.stages.length + 1}`,
-      stages: [newStage],
-    }
-    setPipeline(prev => ({ ...prev, stages: [...prev.stages, newGroup] }))
-  }
-
-  const handleAddStep = (stepType: StepType) => {
-    if (!selectedStageId) return
-    const newStep: PipelineStep = {
-      id: generateId(),
-      name: STEP_TYPE_LABELS[stepType],
-      stepType,
-      description: '',
-    }
-    setPipeline(prev => addStepToStage(prev, selectedStageId, newStep))
-    setSelectedId(newStep.id)
-  }
-
-  const handleDeleteSelected = () => {
-    if (!selectedId) return
-    setPipeline(prev => deleteNodeFromModel(prev, selectedId))
-    setSelectedId(null)
-  }
-
-  const handleExport = () => {
-    const json = JSON.stringify(pipeline, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${pipeline.name.toLowerCase().replace(/\s+/g, '-')}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const stageCount = pipeline.stages.length
-  const stepCount = pipeline.stages.reduce((sum, item) => {
-    if (item.type === 'serial') return sum + item.steps.length
-    return sum + item.stages.reduce((s, st) => s + st.steps.length, 0)
-  }, 0)
+function Builder() {
+  const [state, dispatch] = createBuilderStore()
 
   return (
-    <div className="app-root">
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-left">
-          <div className="logo">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    <BuilderContext.Provider value={{ state, dispatch }}>
+      <div className="app-root">
+        {/* Header */}
+        <header className="app-header">
+          <div className="header-brand">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#grad)" strokeWidth="2">
+              <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="100%" stopColor="#8b5cf6" />
+                </linearGradient>
+              </defs>
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
+            <span className="brand-name">Visual Builder</span>
+            <span className="brand-badge">Harness Canary</span>
           </div>
-          <div>
-            <div className="pipeline-name">{pipeline.name}</div>
-            <div className="pipeline-meta">
-              {stageCount} stage{stageCount !== 1 ? 's' : ''} · {stepCount} step{stepCount !== 1 ? 's' : ''}
+
+          <div className="header-center">
+            <div className="component-count-pill">
+              <span className="count-dot" />
+              {REGISTRY.length} components available
             </div>
           </div>
+
+          <div className="header-right">
+            <a
+              href="https://github.com/harness/canary"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="header-link"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+              harness/canary
+            </a>
+          </div>
+        </header>
+
+        {/* Body */}
+        <div className="app-body">
+          <ComponentLibrary />
+          <BuilderCanvas />
+          <PropertiesPanel />
         </div>
-        <div className="header-right">
-          {selected && (
-            <div className="selected-badge">
-              <div className="selected-dot" />
-              {selected.kind === 'step' ? selected.node.name : selected.kind === 'stage' ? selected.node.name : selected.node.name} selected
-            </div>
-          )}
-          <button className="btn-export" onClick={handleExport}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Export JSON
-          </button>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <div className="app-body">
-        <Sidebar
-          onAddStep={handleAddStep}
-          onAddStage={handleAddStage}
-          onAddParallelGroup={handleAddParallelGroup}
-          hasSelectedStage={!!selectedStageId}
-        />
-
-        {/* Canvas */}
-        <div className="canvas-wrapper">
-          <CanvasProvider id="pipeline-builder">
-            <PipelineGraph
-              data={graphData}
-              nodes={NODE_TYPES}
-              collapse={collapse}
-              collapsed={collapsed}
-              layout={{
-                type: 'harness',
-                leafPortPosition: 80,
-                getHeaderHeight,
-                collapsedPortPositionPerType: {
-                  stage: 100,
-                  parallel: 100,
-                  serial: 100,
-                },
-              }}
-              edgesConfig={{ parallelNodeOffset: 8, serialNodeOffset: 8, radius: 6 }}
-              serialContainerConfig={{
-                nodeGap: 16,
-                paddingBottom: 16,
-                paddingLeft: 16,
-                paddingRight: 16,
-                paddingTop: 0,
-                serialGroupAdjustment: 0,
-              }}
-              parallelContainerConfig={{
-                nodeGap: 16,
-                paddingBottom: 16,
-                paddingLeft: 16,
-                paddingRight: 16,
-                paddingTop: 0,
-                parallelGroupAdjustment: 0,
-              }}
-            />
-            <CanvasControls />
-          </CanvasProvider>
-
-          {/* Empty state */}
-          {pipeline.stages.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="1.5">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              </div>
-              <div className="empty-title">No stages yet</div>
-              <div className="empty-desc">Click "Add Stage" in the sidebar to start building your pipeline</div>
-            </div>
-          )}
-        </div>
-
-        <PropertyPanel
-          selected={selected}
-          onDeleteSelected={handleDeleteSelected}
-          onUpdateStep={(stepId, updates) =>
-            setPipeline(prev => updateStepInModel(prev, stepId, updates))
-          }
-          onUpdateStage={(stageId, updates) =>
-            setPipeline(prev => updateStageInModel(prev, stageId, updates))
-          }
-        />
       </div>
-    </div>
+    </BuilderContext.Provider>
+  )
+}
+
+const t = (key: string) => key
+
+export default function App() {
+  return (
+    <MemoryRouter>
+      <ThemeProvider theme="dark-std-std" setTheme={() => {}} isLightTheme={false}>
+        <TranslationProvider t={t}>
+          <TooltipProvider>
+            <DialogProvider>
+              <RouterBridge>
+                <Builder />
+              </RouterBridge>
+            </DialogProvider>
+          </TooltipProvider>
+        </TranslationProvider>
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
